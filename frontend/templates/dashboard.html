@@ -21,33 +21,88 @@
         </div>
 
         <!-- Cột kết quả -->
-        <div class="glass-panel" id="result-panel" style="opacity: 0.5; pointer-events: none;">
-            <h3>Kết quả trích xuất</h3>
+        <div class="glass-panel" id="result-panel" style="opacity: 0.5; pointer-events: none; max-height: 80vh; overflow-y: auto;">
+            <h3>Kết quả trích xuất & Kiểm duyệt</h3>
             
             <div id="alerts-container" style="margin-top: 16px;"></div>
 
+            <!-- NHÓM 1: THÔNG TIN THỤ HƯỞNG & UNC -->
+            <h4 style="margin: 20px 0 8px 0; color: #3b82f6; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; font-size: 0.95rem;">1. Thông tin Ủy Nhiệm Chi</h4>
+            
             <div class="summary-item">
-                <span>Nhà thầu thụ hưởng</span>
+                <span>Đơn vị thụ hưởng</span>
                 <span id="res-beneficiary">...</span>
             </div>
             <div class="summary-item">
-                <span>Số Tài Khoản</span>
+                <span>Số tài khoản Có</span>
                 <span id="res-account">...</span>
             </div>
             <div class="summary-item">
-                <span>Ngân hàng</span>
+                <span>Ngân hàng hưởng</span>
                 <span id="res-bank">...</span>
             </div>
             <div class="summary-item">
                 <span>Số tiền Đề nghị</span>
-                <span id="res-amount" style="color: var(--success); font-weight: bold; font-size: 1.2rem;">...</span>
+                <span id="res-amount" style="color: var(--success); font-weight: bold; font-size: 1.15rem;">...</span>
             </div>
-            <div class="summary-item" style="border-bottom: none;">
-                <span>Nội dung UNC</span>
-                <span id="res-remarks" style="font-size: 0.9rem; max-width: 60%;">...</span>
+            <div class="summary-item">
+                <span>Số tiền bằng chữ</span>
+                <span id="res-amount-words" style="font-size: 0.9rem; font-style: italic;">...</span>
+            </div>
+            <div class="summary-item">
+                <span>Nội dung UNC (B19)</span>
+                <span id="res-remarks" style="font-size: 0.85rem; max-width: 65%; color: var(--text-main);">...</span>
             </div>
 
-            <div style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+            <!-- NHÓM 2: HỒ SƠ & THỜI GIAN -->
+            <h4 style="margin: 24px 0 8px 0; color: #10b981; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; font-size: 0.95rem;">2. Căn cứ & Chuỗi thời gian</h4>
+            
+            <div class="grid-time" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0;">
+                    <span style="font-size: 0.8rem;">Ngày Đề xuất (Tờ trình)</span>
+                    <span id="res-proposal-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
+                </div>
+                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0;">
+                    <span style="font-size: 0.8rem;">Ngày BQT phê duyệt</span>
+                    <span id="res-approval-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
+                </div>
+                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0;">
+                    <span style="font-size: 0.8rem;">Ngày Báo giá/Hợp đồng</span>
+                    <span id="res-contract-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
+                </div>
+                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0;">
+                    <span style="font-size: 0.8rem;">Ngày Nghiệm thu</span>
+                    <span id="res-acceptance-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
+                </div>
+                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0; grid-column: span 2;">
+                    <span style="font-size: 0.8rem;">Ngày Đề nghị thanh toán</span>
+                    <span id="res-request-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
+                </div>
+            </div>
+
+            <!-- NHÓM 3: HÓA ĐƠN VAT -->
+            <h4 style="margin: 24px 0 8px 0; color: #f59e0b; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; font-size: 0.95rem;">3. Hóa đơn VAT</h4>
+            
+            <div class="summary-item">
+                <span>Số hóa đơn VAT</span>
+                <span id="res-vat-invoice-no">...</span>
+            </div>
+            <div class="summary-item">
+                <span>Ngày hóa đơn VAT</span>
+                <span id="res-vat-date">...</span>
+            </div>
+            <div class="summary-item">
+                <span>Số tiền trên hóa đơn</span>
+                <span id="res-vat-amount">...</span>
+            </div>
+
+            <!-- NHÓM 4: CÁC FILE ĐÃ PHÁT HIỆN -->
+            <h4 style="margin: 24px 0 8px 0; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; font-size: 0.95rem;">4. Tài liệu đã quét</h4>
+            <div id="res-files-list" style="margin-top: 8px; max-height: 120px; overflow-y: auto;">
+                <!-- File list items will go here -->
+            </div>
+
+            <div style="margin-top: 32px; display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px;">
                 <button class="btn" style="background: rgba(255,255,255,0.1); color: white;">Hủy bỏ</button>
                 <button class="btn btn-primary" id="btn-approve"><i data-feather="check-circle"></i> Duyệt & Tạo File UNC</button>
             </div>
@@ -93,12 +148,40 @@
             document.getElementById('res-amount').textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.amount);
             document.getElementById('res-remarks').textContent = d.remarks;
             
+            // Cập nhật các trường thông tin mới thêm
+            document.getElementById('res-amount-words').textContent = d.amount_words || 'Không tìm thấy';
+            document.getElementById('res-proposal-date').textContent = d.proposal_date || 'Không tìm thấy';
+            document.getElementById('res-approval-date').textContent = d.approval_date || 'Không tìm thấy';
+            document.getElementById('res-contract-date').textContent = d.contract_date || 'Không tìm thấy';
+            document.getElementById('res-acceptance-date').textContent = d.acceptance_date || 'Không tìm thấy';
+            document.getElementById('res-request-date').textContent = d.request_date || 'Không tìm thấy';
+            
+            document.getElementById('res-vat-invoice-no').textContent = d.vat_invoice_no || 'Chưa có hóa đơn';
+            document.getElementById('res-vat-date').textContent = d.vat_date || 'Chưa có hóa đơn';
+            document.getElementById('res-vat-amount').textContent = d.vat_amount ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.vat_amount) : 'Chưa có hóa đơn';
+            
+            // Render danh sách file
+            const filesList = document.getElementById('res-files-list');
+            filesList.innerHTML = '';
+            if (result.files_found && result.files_found.length > 0) {
+                result.files_found.forEach(file => {
+                    filesList.innerHTML += `
+                        <div style="font-size:0.85rem; color:var(--text-muted); display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <i data-feather="file" style="width:14px; height:14px; color:#3b82f6;"></i>
+                            <span>${file}</span>
+                        </div>
+                    `;
+                });
+            } else {
+                filesList.innerHTML = '<div style="font-size:0.85rem; color:var(--text-muted);">Không tìm thấy file quét</div>';
+            }
+            
             // Cập nhật Alerts
             const alerts = document.getElementById('alerts-container');
             alerts.innerHTML = '';
             
             if (result.validation.is_valid) {
-                alerts.innerHTML += `<div class="alert alert-success"><i data-feather="check"></i> <div>Hồ sơ hợp lệ, đủ điều kiện thanh toán.</div></div>`;
+                alerts.innerHTML += `<div class="alert alert-success"><i data-feather="check-circle"></i> <div>Hồ sơ hợp lệ, đủ điều kiện thanh toán.</div></div>`;
             } else {
                 result.validation.errors.forEach(err => {
                     alerts.innerHTML += `<div class="alert alert-danger"><i data-feather="x-circle"></i> <div>${err}</div></div>`;

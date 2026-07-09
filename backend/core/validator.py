@@ -47,7 +47,16 @@ def validate_payment_record(data: dict) -> dict:
         results["is_valid"] = False
         
     # 8.3 Số tiền
-    if data.get("vat_amount") is not None and data.get("amount") != data.get("vat_amount"):
+    vat_amount = data.get("vat_amount")
+    if vat_amount in (None, "", "None", "null", 0):
+        vat_amount = None
+    else:
+        try:
+            vat_amount = int(vat_amount)
+        except (ValueError, TypeError):
+            vat_amount = None
+
+    if vat_amount is not None and data.get("amount") != vat_amount:
         results["errors"].append("Lỗi tuyệt đối: Số tiền đề nghị TT không khớp số tiền VAT.")
         results["is_valid"] = False
         

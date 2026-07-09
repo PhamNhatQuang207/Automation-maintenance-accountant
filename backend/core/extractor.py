@@ -25,7 +25,7 @@ Cấu trúc JSON yêu cầu:
   "contract_date": "Ngày ký hợp đồng hoặc ngày trên Báo giá căn cứ (định dạng dd/mm/yyyy, nếu không thấy để null)",
   "acceptance_date": "Ngày ký nghiệm thu hoàn thành công việc (định dạng dd/mm/yyyy, nếu không thấy để null)",
   "vat_date": "Ngày xuất hóa đơn VAT nếu có (định dạng dd/mm/yyyy, nếu không thấy để null)",
-  "vat_amount": 12345678, // Số tiền ghi trên hóa đơn VAT bằng số (nếu không có hóa đơn để null)
+  "vat_amount": 12345678, // Tổng cộng tiền thanh toán sau thuế (tiền hàng + tiền thuế VAT/GTGT) ghi trên hóa đơn VAT bằng số (không lấy riêng tiền thuế, nếu không có hóa đơn để null)
   "vat_invoice_no": "Số hóa đơn VAT (nếu không có để null)",
   "request_date": "Ngày trên giấy Đề nghị thanh toán (định dạng dd/mm/yyyy, nếu không có ghi ngày hiện tại)"
 }

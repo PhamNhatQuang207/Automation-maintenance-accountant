@@ -1,6 +1,6 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-from core.extractor import extract_information
+from core.extractor import extract_information_from_files
 from core.validator import validate_payment_record
 
 app = Flask(__name__, 
@@ -160,14 +160,30 @@ def api_analyze():
             return jsonify({"status": "error", "message": "Không tìm thấy file ảnh hoặc PDF đề nghị thanh toán nào trong thư mục này"}), 400
             
         # 2. Đọc thử dữ liệu Sheet (Ví dụ đọc sheet TongHop_HangMuc)
-        # Chúng ta giả lập đọc để kiểm tra kết nối Sheets
         sheet_data = read_sheet_data(sheets_service, spreadsheet_id, 'TongHop_HangMuc!A1:C5')
         print(f"[API] Đã đọc dữ liệu Sheet. Số dòng: {len(sheet_data)}")
         
-        # 3. Phân tích OCR bằng AI Mock (POC)
-        # Trong giai đoạn sau, ta sẽ tải file đầu tiên trong image_files và truyền qua AI
-        target_file = image_files[0]
-        data = extract_information(target_file['name'])
+        # Kiểm tra cấu hình API Key
+        api_key = session.get('api_key')
+        ocr_provider = session.get('ocr_provider', 'gemini')
+        if not api_key:
+            return jsonify({"status": "error", "message": "Vui lòng cấu hình API Key trong mục Cài đặt trước khi phân tích"}), 400
+            
+        # 3. Tải tất cả các file hình ảnh/PDF trong thư mục về bộ nhớ tạm (RAM)
+        from core.google_connector import download_file_to_bytes
+        downloaded_files = []
+        for f in image_files:
+            print(f"[API] Đang tải file: {f['name']}...")
+            content = download_file_to_bytes(drive_service, f['id'])
+            downloaded_files.append({
+                'name': f['name'],
+                'mimeType': f['mimeType'],
+                'content': content
+            })
+            
+        # 4. Gửi toàn bộ ảnh/PDF sang AI để trích xuất thông tin
+        print(f"[API] Đang gửi {len(downloaded_files)} file sang {ocr_provider} để xử lý...")
+        data = extract_information_from_files(downloaded_files, api_key, ocr_provider)
         
         # Chạy kiểm tra luật logic
         validation = validate_payment_record(data)

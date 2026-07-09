@@ -62,8 +62,25 @@
         document.getElementById('loader').style.display = 'flex';
         
         try {
-            const res = await fetch('/api/analyze', { method: 'POST' });
+            const driveLink = document.getElementById('drive_link').value;
+            const sheetLink = document.getElementById('sheet_link').value;
+            
+            const res = await fetch('/api/analyze', { 
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    drive_link: driveLink,
+                    sheet_link: sheetLink
+                })
+            });
             const result = await res.json();
+            
+            if (result.status === 'error') {
+                alert('Lỗi: ' + result.message);
+                return;
+            }
             
             // Cập nhật UI
             document.getElementById('result-panel').style.opacity = '1';

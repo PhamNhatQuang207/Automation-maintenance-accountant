@@ -124,19 +124,63 @@ def settings():
                            ocr_provider=session.get('ocr_provider', 'gemini'),
                            success=request.args.get('success'))
 
+from core.google_connector import (
+    get_google_services, parse_folder_id, parse_spreadsheet_id, 
+    list_files_in_folder, read_sheet_data
+)
+
 @app.route('/api/analyze', methods=['POST'])
 def api_analyze():
-    """Mock API cho phân tích OCR, gọi core/extractor"""
-    # Trong môi trường thật, sẽ nhận file/URL từ request và gọi LLM API
-    # Ở đây chúng ta gọi hàm PoC extract_information mock
-    data = extract_information("dummy_path")
-    validation = validate_payment_record(data)
+    if not session.get('tokens'):
+        return jsonify({"status": "error", "message": "Chưa đăng nhập Google"}), 401
+        
+    req_data = request.get_json() or {}
+    drive_link = req_data.get('drive_link')
+    sheet_link = req_data.get('sheet_link')
     
-    return jsonify({
-        "status": "success",
-        "data": data,
-        "validation": validation
-    })
+    if not drive_link or not sheet_link:
+        return jsonify({"status": "error", "message": "Thiếu link Drive hoặc link Master Sheets"}), 400
+        
+    folder_id = parse_folder_id(drive_link)
+    spreadsheet_id = parse_spreadsheet_id(sheet_link)
+    
+    if not folder_id or not spreadsheet_id:
+        return jsonify({"status": "error", "message": "Link Drive hoặc Sheets không hợp lệ"}), 400
+        
+    try:
+        # Khởi tạo dịch vụ
+        access_token = session['tokens']['access_token']
+        drive_service, sheets_service = get_google_services(access_token)
+        
+        # 1. Liệt kê danh sách file trong thư mục
+        files = list_files_in_folder(drive_service, folder_id)
+        image_files = [f for f in files if 'image' in f['mimeType'] or 'pdf' in f['mimeType']]
+        
+        if not image_files:
+            return jsonify({"status": "error", "message": "Không tìm thấy file ảnh hoặc PDF đề nghị thanh toán nào trong thư mục này"}), 400
+            
+        # 2. Đọc thử dữ liệu Sheet (Ví dụ đọc sheet TongHop_HangMuc)
+        # Chúng ta giả lập đọc để kiểm tra kết nối Sheets
+        sheet_data = read_sheet_data(sheets_service, spreadsheet_id, 'TongHop_HangMuc!A1:C5')
+        print(f"[API] Đã đọc dữ liệu Sheet. Số dòng: {len(sheet_data)}")
+        
+        # 3. Phân tích OCR bằng AI Mock (POC)
+        # Trong giai đoạn sau, ta sẽ tải file đầu tiên trong image_files và truyền qua AI
+        target_file = image_files[0]
+        data = extract_information(target_file['name'])
+        
+        # Chạy kiểm tra luật logic
+        validation = validate_payment_record(data)
+        
+        return jsonify({
+            "status": "success",
+            "files_found": [f['name'] for f in image_files],
+            "data": data,
+            "validation": validation
+        })
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Lỗi Google API: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -4,9 +4,28 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-def get_google_services(access_token):
-    """Khởi tạo Google Services client bằng Access Token"""
-    creds = Credentials(token=access_token)
+import os
+import json
+
+def get_google_services(tokens):
+    """Khởi tạo Google Services client bằng Tokens (chứa access_token và refresh_token nếu có)"""
+    client_secret_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'client_secret.json')
+    
+    try:
+        with open(client_secret_path, 'r') as f:
+            client_config = json.load(f)['web']
+            
+        creds = Credentials(
+            token=tokens.get('access_token'),
+            refresh_token=tokens.get('refresh_token'),
+            token_uri=client_config.get('token_uri'),
+            client_id=client_config.get('client_id'),
+            client_secret=client_config.get('client_secret')
+        )
+    except Exception as e:
+        print(f"[Warning] Không load được credentials để tự động refresh: {e}")
+        creds = Credentials(token=tokens.get('access_token'))
+        
     drive_service = build('drive', 'v3', credentials=creds)
     sheets_service = build('sheets', 'v4', credentials=creds)
     return drive_service, sheets_service

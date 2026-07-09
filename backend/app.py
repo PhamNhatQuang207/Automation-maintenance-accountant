@@ -149,8 +149,7 @@ def api_analyze():
         
     try:
         # Khởi tạo dịch vụ
-        access_token = session['tokens']['access_token']
-        drive_service, sheets_service = get_google_services(access_token)
+        drive_service, sheets_service = get_google_services(session['tokens'])
         
         # 1. Liệt kê danh sách file trong thư mục
         files = list_files_in_folder(drive_service, folder_id)

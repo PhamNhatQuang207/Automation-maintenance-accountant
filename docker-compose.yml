@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: unc_backend
+    volumes:
+      # Mount thư mục templates để Flask render được HTML
+      - ./frontend/templates:/app/frontend/templates
+      # Nếu trong code backend tạo ra file UNC lưu ở /tmp, ta cũng có thể mount volume ra ngoài
+    environment:
+      - FLASK_ENV=production
+      - PYTHONIOENCODING=utf-8
+    expose:
+      - "5000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: unc_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

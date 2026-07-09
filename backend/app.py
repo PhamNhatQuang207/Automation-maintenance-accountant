@@ -6,7 +6,7 @@ from core.validator import validate_payment_record
 app = Flask(__name__, 
             template_folder='../frontend/templates', 
             static_folder='../frontend/static')
-app.secret_key = os.urandom(24)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'bqt_parkhill1_secure_key_123')
 
 # Cấu hình giả lập cho giai đoạn thiết kế UI
 app.config['DEMO_MODE'] = True

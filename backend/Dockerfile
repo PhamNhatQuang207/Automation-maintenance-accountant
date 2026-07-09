@@ -12,5 +12,5 @@ COPY backend/ .
 # Expose port (Gunicorn sẽ chạy ở 5000)
 EXPOSE 5000
 
-# Chạy Gunicorn để phục vụ Flask app trong môi trường production
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Chạy Gunicorn để phục vụ Flask app trong môi trường production với timeout 300s
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "300", "app:app"]

@@ -99,3 +99,4 @@ ipython_config.py
 .env
 credentials.json
 token.json
+backend/client_secret.json

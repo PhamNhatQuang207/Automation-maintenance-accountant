@@ -45,8 +45,8 @@ def extract_information_from_files(files_list: list, api_key: str, provider: str
         return _extract_gemini(files_list, api_key)
 
 def _extract_gemini(files_list, api_key):
-    # Gemini 1.5 Flash hỗ trợ Multimodal (nhiều ảnh/PDF cùng lúc)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # Gemini 2.5 Flash hỗ trợ Multimodal (nhiều ảnh/PDF cùng lúc)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     parts = [{"text": PROMPT}]
     

@@ -2,16 +2,17 @@
 {% block content %}
 <div class="login-container">
     <div class="glass-panel login-card">
-        <h1>UNC AutoBot</h1>
-        <p>Công cụ tự động hóa Ủy Nhiệm Chi — BQT Park Hill 1</p>
+        <div style="font-size: 3rem; margin-bottom: 20px;">🤖</div>
+        <h1>Hệ Thống Trợ Lý Kế Toán</h1>
+        <p>Phiên bản nội bộ BQT Park Hill 1</p>
         
         <a href="{{ url_for('auth_google') }}" class="btn btn-google">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" width="18">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" width="20" style="margin-right: 10px;">
             Đăng nhập với Google
         </a>
         
-        <div style="margin-top: 24px; font-size: 12px; color: var(--text-muted);">
-            Yêu cầu quyền truy cập Google Drive & Sheets để đọc chứng từ và ghi dữ liệu.
+        <div style="margin-top: 30px; font-size: 0.85rem; color: var(--text-muted);">
+            Hệ thống yêu cầu quyền truy cập vào Google Drive và Google Sheets để đọc hồ sơ và tạo Ủy Nhiệm Chi.
         </div>
     </div>
 </div>

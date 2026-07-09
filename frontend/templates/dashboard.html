@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-container">
+    <h2>Xử Lý Hồ Sơ Thanh Toán Mới</h2>
+    <p style="color: var(--text-muted); margin-bottom: 24px;">Nhập link thư mục Drive chứa hồ sơ (Ảnh Đề nghị TT, Hóa đơn VAT, v.v.)</p>
+
+    <div class="grid-2">
+        <!-- Cột nhập liệu -->
+        <div class="glass-panel">
+            <form id="analyze-form">
+                <div class="form-group">
+                    <label>Link Folder Google Drive (Hồ sơ hạng mục)</label>
+                    <input type="url" class="form-control" id="drive_link" required placeholder="https://drive.google.com/drive/folders/...">
+                </div>
+                <div class="form-group">
+                    <label>Link File Master (TonghopBaotri)</label>
+                    <input type="url" class="form-control" id="sheet_link" required placeholder="https://docs.google.com/spreadsheets/d/...">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;"><i data-feather="cpu"></i> Bắt đầu phân tích AI</button>
+            </form>
+        </div>
+
+        <!-- Cột kết quả -->
+        <div class="glass-panel" id="result-panel" style="opacity: 0.5; pointer-events: none;">
+            <h3>Kết quả trích xuất</h3>
+            
+            <div id="alerts-container" style="margin-top: 16px;"></div>
+
+            <div class="summary-item">
+                <span>Nhà thầu thụ hưởng</span>
+                <span id="res-beneficiary">...</span>
+            </div>
+            <div class="summary-item">
+                <span>Số Tài Khoản</span>
+                <span id="res-account">...</span>
+            </div>
+            <div class="summary-item">
+                <span>Ngân hàng</span>
+                <span id="res-bank">...</span>
+            </div>
+            <div class="summary-item">
+                <span>Số tiền Đề nghị</span>
+                <span id="res-amount" style="color: var(--success); font-weight: bold; font-size: 1.2rem;">...</span>
+            </div>
+            <div class="summary-item" style="border-bottom: none;">
+                <span>Nội dung UNC</span>
+                <span id="res-remarks" style="font-size: 0.9rem; max-width: 60%;">...</span>
+            </div>
+
+            <div style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn" style="background: rgba(255,255,255,0.1); color: white;">Hủy bỏ</button>
+                <button class="btn btn-primary" id="btn-approve"><i data-feather="check-circle"></i> Duyệt & Tạo File UNC</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    document.getElementById('analyze-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        document.getElementById('loader').style.display = 'flex';
+        
+        try {
+            const res = await fetch('/api/analyze', { method: 'POST' });
+            const result = await res.json();
+            
+            // Cập nhật UI
+            document.getElementById('result-panel').style.opacity = '1';
+            document.getElementById('result-panel').style.pointerEvents = 'auto';
+            
+            const d = result.data;
+            document.getElementById('res-beneficiary').textContent = d.beneficiary;
+            document.getElementById('res-account').textContent = d.account;
+            document.getElementById('res-bank').textContent = d.bank;
+            document.getElementById('res-amount').textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.amount);
+            document.getElementById('res-remarks').textContent = d.remarks;
+            
+            // Cập nhật Alerts
+            const alerts = document.getElementById('alerts-container');
+            alerts.innerHTML = '';
+            
+            if (result.validation.is_valid) {
+                alerts.innerHTML += `<div class="alert alert-success"><i data-feather="check"></i> <div>Hồ sơ hợp lệ, đủ điều kiện thanh toán.</div></div>`;
+            } else {
+                result.validation.errors.forEach(err => {
+                    alerts.innerHTML += `<div class="alert alert-danger"><i data-feather="x-circle"></i> <div>${err}</div></div>`;
+                });
+            }
+            
+            result.validation.warnings.forEach(warn => {
+                alerts.innerHTML += `<div class="alert alert-warning"><i data-feather="alert-triangle"></i> <div>${warn}</div></div>`;
+            });
+            
+            feather.replace();
+            
+        } catch (err) {
+            alert('Có lỗi xảy ra: ' + err);
+        } finally {
+            document.getElementById('loader').style.display = 'none';
+        }
+    });
+
+    document.getElementById('btn-approve').addEventListener('click', () => {
+        alert("Đã gửi lệnh tạo UNC! (Tính năng mô phỏng đang được phát triển)");
+    });
+</script>
+{% endblock %}

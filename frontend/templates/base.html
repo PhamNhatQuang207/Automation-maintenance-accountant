@@ -1,23 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Kế Toán Bảo Trì | BQT Park Hill 1</title>
+    <title>UNC AutoBot — BQT Park Hill 1</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://unpkg.com/feather-icons"></script>
 </head>
 <body>
     <nav>
-        <div class="brand">UNC AutoBot ✨</div>
+        <div class="brand">UNC AutoBot</div>
         {% if session.get('user') %}
         <div class="nav-links">
-            <a href="{{ url_for('index') }}">Dashboard</a>
+            <a href="{{ url_for('index') }}">Xử lý hồ sơ</a>
             <a href="{{ url_for('settings') }}">Cấu hình</a>
-            <div class="user-profile" style="display:inline-flex; margin-left:24px;">
-                <img src="{{ session['user']['picture'] }}" alt="avatar">
+            <div class="user-profile">
+                <img src="{{ session['user']['picture'] }}" alt="">
                 <span>{{ session['user']['name'] }}</span>
-                <a href="{{ url_for('logout') }}" style="margin-left:12px; color:var(--danger);"><i data-feather="log-out"></i></a>
+                <a href="{{ url_for('logout') }}" style="margin-left:4px; color:var(--text-muted);"><i data-feather="log-out" style="width:15px;height:15px;"></i></a>
             </div>
         </div>
         {% endif %}
@@ -27,12 +27,10 @@
 
     <div id="loader">
         <div class="spinner"></div>
-        <p>Hệ thống AI đang xử lý...</p>
+        <p>Đang xử lý hồ sơ…</p>
     </div>
 
-    <script>
-        feather.replace();
-    </script>
+    <script>feather.replace();</script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

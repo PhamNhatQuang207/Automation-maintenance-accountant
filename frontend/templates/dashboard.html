@@ -1,110 +1,62 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="dashboard-container">
-    <h2>Xử Lý Hồ Sơ Thanh Toán Mới</h2>
-    <p style="color: var(--text-muted); margin-bottom: 24px;">Nhập link thư mục Drive chứa hồ sơ (Ảnh Đề nghị TT, Hóa đơn VAT, v.v.)</p>
+    <h2>Xử lý hồ sơ thanh toán</h2>
+    <p style="color: var(--text-secondary); margin-top: 4px; font-size: 13px;">Dán link thư mục Drive chứa chứng từ hạng mục và link file Master để bắt đầu.</p>
 
     <div class="grid-2">
-        <!-- Cột nhập liệu -->
+        <!-- Input form -->
         <div class="glass-panel">
             <form id="analyze-form">
                 <div class="form-group">
-                    <label>Link Folder Google Drive (Hồ sơ hạng mục)</label>
-                    <input type="url" class="form-control" id="drive_link" required placeholder="https://drive.google.com/drive/folders/...">
+                    <label>Folder Google Drive</label>
+                    <input type="url" class="form-control" id="drive_link" required placeholder="https://drive.google.com/drive/folders/…">
                 </div>
                 <div class="form-group">
-                    <label>Link File Master (TonghopBaotri)</label>
-                    <input type="url" class="form-control" id="sheet_link" required placeholder="https://docs.google.com/spreadsheets/d/...">
+                    <label>File Master (Google Sheets)</label>
+                    <input type="url" class="form-control" id="sheet_link" required placeholder="https://docs.google.com/spreadsheets/d/…">
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;"><i data-feather="cpu"></i> Bắt đầu phân tích AI</button>
+                <button type="submit" class="btn btn-primary" style="width: 100%;"><i data-feather="play" style="width:14px;height:14px;"></i> Phân tích</button>
             </form>
         </div>
 
-        <!-- Cột kết quả -->
-        <div class="glass-panel" id="result-panel" style="opacity: 0.5; pointer-events: none; max-height: 80vh; overflow-y: auto;">
-            <h3>Kết quả trích xuất & Kiểm duyệt</h3>
+        <!-- Result panel -->
+        <div class="glass-panel" id="result-panel" style="opacity: 0.4; pointer-events: none; max-height: 82vh; overflow-y: auto;">
             
-            <div id="alerts-container" style="margin-top: 16px;"></div>
+            <div id="alerts-container"></div>
 
-            <!-- NHÓM 1: THÔNG TIN THỤ HƯỞNG & UNC -->
-            <h4 style="margin: 20px 0 8px 0; color: #3b82f6; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; font-size: 0.95rem;">1. Thông tin Ủy Nhiệm Chi</h4>
-            
-            <div class="summary-item">
-                <span>Đơn vị thụ hưởng</span>
-                <span id="res-beneficiary">...</span>
-            </div>
-            <div class="summary-item">
-                <span>Số tài khoản Có</span>
-                <span id="res-account">...</span>
-            </div>
-            <div class="summary-item">
-                <span>Ngân hàng hưởng</span>
-                <span id="res-bank">...</span>
-            </div>
-            <div class="summary-item">
-                <span>Số tiền Đề nghị</span>
-                <span id="res-amount" style="color: var(--success); font-weight: bold; font-size: 1.15rem;">...</span>
-            </div>
-            <div class="summary-item">
-                <span>Số tiền bằng chữ</span>
-                <span id="res-amount-words" style="font-size: 0.9rem; font-style: italic;">...</span>
-            </div>
-            <div class="summary-item">
-                <span>Nội dung UNC (B19)</span>
-                <span id="res-remarks" style="font-size: 0.85rem; max-width: 65%; color: var(--text-main);">...</span>
+            <!-- 1. UNC Info -->
+            <div class="section-label">Thông tin Ủy Nhiệm Chi</div>
+            <div class="summary-item"><span>Đơn vị thụ hưởng</span><span id="res-beneficiary">—</span></div>
+            <div class="summary-item"><span>Số tài khoản</span><span id="res-account">—</span></div>
+            <div class="summary-item"><span>Ngân hàng</span><span id="res-bank">—</span></div>
+            <div class="summary-item"><span>Số tiền</span><span id="res-amount" style="color: var(--primary); font-weight: 600;">—</span></div>
+            <div class="summary-item"><span>Bằng chữ</span><span id="res-amount-words" style="font-style: italic; font-size: 12px;">—</span></div>
+            <div class="summary-item"><span>Nội dung</span><span id="res-remarks" style="font-size: 12px; max-width: 60%;">—</span></div>
+
+            <!-- 2. Timeline -->
+            <div class="section-label">Chuỗi thời gian</div>
+            <div class="grid-time">
+                <div class="time-cell"><div class="label">Đề xuất</div><div class="value" id="res-proposal-date">—</div></div>
+                <div class="time-cell"><div class="label">BQT duyệt</div><div class="value" id="res-approval-date">—</div></div>
+                <div class="time-cell"><div class="label">HĐ / Báo giá</div><div class="value" id="res-contract-date">—</div></div>
+                <div class="time-cell"><div class="label">Nghiệm thu</div><div class="value" id="res-acceptance-date">—</div></div>
+                <div class="time-cell"><div class="label">Đề nghị TT</div><div class="value" id="res-request-date">—</div></div>
             </div>
 
-            <!-- NHÓM 2: HỒ SƠ & THỜI GIAN -->
-            <h4 style="margin: 24px 0 8px 0; color: #10b981; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; font-size: 0.95rem;">2. Căn cứ & Chuỗi thời gian</h4>
-            
-            <div class="grid-time" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
-                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0;">
-                    <span style="font-size: 0.8rem;">Ngày Đề xuất (Tờ trình)</span>
-                    <span id="res-proposal-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
-                </div>
-                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0;">
-                    <span style="font-size: 0.8rem;">Ngày BQT phê duyệt</span>
-                    <span id="res-approval-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
-                </div>
-                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0;">
-                    <span style="font-size: 0.8rem;">Ngày Báo giá/Hợp đồng</span>
-                    <span id="res-contract-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
-                </div>
-                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0;">
-                    <span style="font-size: 0.8rem;">Ngày Nghiệm thu</span>
-                    <span id="res-acceptance-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
-                </div>
-                <div class="summary-item" style="flex-direction: column; align-items: flex-start; padding: 6px 0; grid-column: span 2;">
-                    <span style="font-size: 0.8rem;">Ngày Đề nghị thanh toán</span>
-                    <span id="res-request-date" style="font-size: 0.9rem; margin-top: 4px;">...</span>
-                </div>
-            </div>
+            <!-- 3. VAT -->
+            <div class="section-label">Hóa đơn VAT</div>
+            <div class="summary-item"><span>Số hóa đơn</span><span id="res-vat-invoice-no">—</span></div>
+            <div class="summary-item"><span>Ngày</span><span id="res-vat-date">—</span></div>
+            <div class="summary-item"><span>Số tiền (sau thuế)</span><span id="res-vat-amount">—</span></div>
 
-            <!-- NHÓM 3: HÓA ĐƠN VAT -->
-            <h4 style="margin: 24px 0 8px 0; color: #f59e0b; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; font-size: 0.95rem;">3. Hóa đơn VAT</h4>
-            
-            <div class="summary-item">
-                <span>Số hóa đơn VAT</span>
-                <span id="res-vat-invoice-no">...</span>
-            </div>
-            <div class="summary-item">
-                <span>Ngày hóa đơn VAT</span>
-                <span id="res-vat-date">...</span>
-            </div>
-            <div class="summary-item">
-                <span>Số tiền trên hóa đơn</span>
-                <span id="res-vat-amount">...</span>
-            </div>
+            <!-- 4. Files scanned -->
+            <div class="section-label">Tài liệu đã quét</div>
+            <div id="res-files-list"></div>
 
-            <!-- NHÓM 4: CÁC FILE ĐÃ PHÁT HIỆN -->
-            <h4 style="margin: 24px 0 8px 0; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; font-size: 0.95rem;">4. Tài liệu đã quét</h4>
-            <div id="res-files-list" style="margin-top: 8px; max-height: 120px; overflow-y: auto;">
-                <!-- File list items will go here -->
-            </div>
-
-            <div style="margin-top: 32px; display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px;">
-                <button class="btn" style="background: rgba(255,255,255,0.1); color: white;">Hủy bỏ</button>
-                <button class="btn btn-primary" id="btn-approve"><i data-feather="check-circle"></i> Duyệt & Tạo File UNC</button>
+            <div style="margin-top: 24px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 16px;">
+                <button class="btn" style="background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border);">Hủy</button>
+                <button class="btn btn-primary" id="btn-approve"><i data-feather="check" style="width:14px;height:14px;"></i> Duyệt & Tạo UNC</button>
             </div>
         </div>
     </div>
@@ -112,97 +64,77 @@
 {% endblock %}
 {% block scripts %}
 <script>
-    document.getElementById('analyze-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        document.getElementById('loader').style.display = 'flex';
+document.getElementById('analyze-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('loader').style.display = 'flex';
+    
+    try {
+        const res = await fetch('/api/analyze', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                drive_link: document.getElementById('drive_link').value,
+                sheet_link: document.getElementById('sheet_link').value
+            })
+        });
+        const result = await res.json();
         
-        try {
-            const driveLink = document.getElementById('drive_link').value;
-            const sheetLink = document.getElementById('sheet_link').value;
-            
-            const res = await fetch('/api/analyze', { 
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    drive_link: driveLink,
-                    sheet_link: sheetLink
-                })
-            });
-            const result = await res.json();
-            
-            if (result.status === 'error') {
-                alert('Lỗi: ' + result.message);
-                return;
-            }
-            
-            // Cập nhật UI
-            document.getElementById('result-panel').style.opacity = '1';
-            document.getElementById('result-panel').style.pointerEvents = 'auto';
-            
-            const d = result.data;
-            document.getElementById('res-beneficiary').textContent = d.beneficiary;
-            document.getElementById('res-account').textContent = d.account;
-            document.getElementById('res-bank').textContent = d.bank;
-            document.getElementById('res-amount').textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.amount);
-            document.getElementById('res-remarks').textContent = d.remarks;
-            
-            // Cập nhật các trường thông tin mới thêm
-            document.getElementById('res-amount-words').textContent = d.amount_words || 'Không tìm thấy';
-            document.getElementById('res-proposal-date').textContent = d.proposal_date || 'Không tìm thấy';
-            document.getElementById('res-approval-date').textContent = d.approval_date || 'Không tìm thấy';
-            document.getElementById('res-contract-date').textContent = d.contract_date || 'Không tìm thấy';
-            document.getElementById('res-acceptance-date').textContent = d.acceptance_date || 'Không tìm thấy';
-            document.getElementById('res-request-date').textContent = d.request_date || 'Không tìm thấy';
-            
-            document.getElementById('res-vat-invoice-no').textContent = d.vat_invoice_no || 'Chưa có hóa đơn';
-            document.getElementById('res-vat-date').textContent = d.vat_date || 'Chưa có hóa đơn';
-            document.getElementById('res-vat-amount').textContent = d.vat_amount ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.vat_amount) : 'Chưa có hóa đơn';
-            
-            // Render danh sách file
-            const filesList = document.getElementById('res-files-list');
-            filesList.innerHTML = '';
-            if (result.files_found && result.files_found.length > 0) {
-                result.files_found.forEach(file => {
-                    filesList.innerHTML += `
-                        <div style="font-size:0.85rem; color:var(--text-muted); display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                            <i data-feather="file" style="width:14px; height:14px; color:#3b82f6;"></i>
-                            <span>${file}</span>
-                        </div>
-                    `;
-                });
-            } else {
-                filesList.innerHTML = '<div style="font-size:0.85rem; color:var(--text-muted);">Không tìm thấy file quét</div>';
-            }
-            
-            // Cập nhật Alerts
-            const alerts = document.getElementById('alerts-container');
-            alerts.innerHTML = '';
-            
-            if (result.validation.is_valid) {
-                alerts.innerHTML += `<div class="alert alert-success"><i data-feather="check-circle"></i> <div>Hồ sơ hợp lệ, đủ điều kiện thanh toán.</div></div>`;
-            } else {
-                result.validation.errors.forEach(err => {
-                    alerts.innerHTML += `<div class="alert alert-danger"><i data-feather="x-circle"></i> <div>${err}</div></div>`;
-                });
-            }
-            
-            result.validation.warnings.forEach(warn => {
-                alerts.innerHTML += `<div class="alert alert-warning"><i data-feather="alert-triangle"></i> <div>${warn}</div></div>`;
-            });
-            
-            feather.replace();
-            
-        } catch (err) {
-            alert('Có lỗi xảy ra: ' + err);
-        } finally {
-            document.getElementById('loader').style.display = 'none';
-        }
-    });
+        if (result.status === 'error') { alert(result.message); return; }
+        
+        const panel = document.getElementById('result-panel');
+        panel.style.opacity = '1';
+        panel.style.pointerEvents = 'auto';
+        
+        const d = result.data;
+        document.getElementById('res-beneficiary').textContent = d.beneficiary;
+        document.getElementById('res-account').textContent = d.account;
+        document.getElementById('res-bank').textContent = d.bank;
+        document.getElementById('res-amount').textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.amount);
+        document.getElementById('res-amount-words').textContent = d.amount_words || '—';
+        document.getElementById('res-remarks').textContent = d.remarks;
+        
+        document.getElementById('res-proposal-date').textContent = d.proposal_date || '—';
+        document.getElementById('res-approval-date').textContent = d.approval_date || '—';
+        document.getElementById('res-contract-date').textContent = d.contract_date || '—';
+        document.getElementById('res-acceptance-date').textContent = d.acceptance_date || '—';
+        document.getElementById('res-request-date').textContent = d.request_date || '—';
+        
+        document.getElementById('res-vat-invoice-no').textContent = d.vat_invoice_no || 'Chưa có';
+        document.getElementById('res-vat-date').textContent = d.vat_date || 'Chưa có';
+        document.getElementById('res-vat-amount').textContent = d.vat_amount 
+            ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.vat_amount) 
+            : 'Chưa có';
+        
+        const fl = document.getElementById('res-files-list');
+        fl.innerHTML = '';
+        (result.files_found || []).forEach(f => {
+            fl.innerHTML += `<div class="file-item"><i data-feather="file-text"></i><span>${f}</span></div>`;
+        });
 
-    document.getElementById('btn-approve').addEventListener('click', () => {
-        alert("Đã gửi lệnh tạo UNC! (Tính năng mô phỏng đang được phát triển)");
-    });
+        const alerts = document.getElementById('alerts-container');
+        alerts.innerHTML = '';
+        if (result.validation.is_valid) {
+            alerts.innerHTML = '<div class="alert alert-success"><i data-feather="check-circle"></i><div>Hồ sơ hợp lệ.</div></div>';
+        } else {
+            (result.validation.errors || []).forEach(e => {
+                alerts.innerHTML += `<div class="alert alert-danger"><i data-feather="x-circle"></i><div>${e}</div></div>`;
+            });
+        }
+        (result.validation.warnings || []).forEach(w => {
+            alerts.innerHTML += `<div class="alert alert-warning"><i data-feather="alert-triangle"></i><div>${w}</div></div>`;
+        });
+        
+        feather.replace();
+        
+    } catch (err) {
+        alert('Lỗi: ' + err);
+    } finally {
+        document.getElementById('loader').style.display = 'none';
+    }
+});
+
+document.getElementById('btn-approve').addEventListener('click', () => {
+    alert('Tính năng tạo UNC đang được phát triển.');
+});
 </script>
 {% endblock %}

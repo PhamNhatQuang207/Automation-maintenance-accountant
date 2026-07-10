@@ -8,8 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/unc-webapp-backend
-  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/unc-webapp-frontend
 
 jobs:
 
@@ -78,6 +76,13 @@ jobs:
       packages: write
 
     steps:
+      - name: Lowercase image names for GHCR
+        run: |
+          echo "IMAGE_BACKEND=ghcr.io/${OWNER,,}/unc-webapp-backend" >> $GITHUB_ENV
+          echo "IMAGE_FRONTEND=ghcr.io/${OWNER,,}/unc-webapp-frontend" >> $GITHUB_ENV
+        env:
+          OWNER: '${{ github.repository_owner }}'
+
       - name: Checkout code
         uses: actions/checkout@v4
 

@@ -1,0 +1,108 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Deploy on-demand Workflow — UNC AutoBot
+#
+# Trigger thủ công từ GitHub UI hoặc CLI khi muốn deploy lên server mới.
+# Có thể chọn environment (staging / production) và image tag cụ thể.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy On-Demand
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      image_tag:
+        description: 'Docker image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+
+env:
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/unc-webapp-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/unc-webapp-frontend
+
+jobs:
+  deploy:
+    name: "🚀 Deploy (${{ github.event.inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          missing=()
+          [ -z "$DEPLOY_HOST" ]    && missing+=("DEPLOY_HOST")
+          [ -z "$DEPLOY_USER" ]    && missing+=("DEPLOY_USER")
+          [ -z "$DEPLOY_SSH_KEY" ] && missing+=("DEPLOY_SSH_KEY")
+          [ -z "$DEPLOY_PATH" ]    && missing+=("DEPLOY_PATH")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "❌ Missing required secrets: ${missing[*]}"
+            echo "   Please configure them in GitHub → Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "✅ All required secrets are configured"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 22
+          timeout: 60s
+          command_timeout: 15m
+          script: |
+            set -e
+            TAG="${{ github.event.inputs.image_tag }}"
+            BACKEND_IMG="${{ env.IMAGE_BACKEND }}:${TAG}"
+            FRONTEND_IMG="${{ env.IMAGE_FRONTEND }}:${TAG}"
+
+            echo "📦 Deploying tag: ${TAG} to ${{ github.event.inputs.environment }}"
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            # Login GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # Pull
+            docker pull "${BACKEND_IMG}"
+            docker pull "${FRONTEND_IMG}"
+
+            # Cập nhật .env với image tag cụ thể (nếu compose dùng variable)
+            export BACKEND_IMAGE="${BACKEND_IMG}"
+            export FRONTEND_IMAGE="${FRONTEND_IMG}"
+
+            # Restart
+            docker compose down --remove-orphans
+            BACKEND_IMAGE="${BACKEND_IMG}" FRONTEND_IMAGE="${FRONTEND_IMG}" \
+              docker compose up -d --no-build
+
+            # Health check đơn giản — đợi tối đa 30s
+            echo "⏳ Waiting for services to start..."
+            for i in $(seq 1 6); do
+              sleep 5
+              if curl -sf http://localhost/login > /dev/null 2>&1; then
+                echo "✅ Service is healthy!"
+                break
+              fi
+              echo "   Attempt ${i}/6..."
+            done
+
+            # Dọn dẹp
+            docker image prune -f
+
+            echo "🎉 Deploy completed — $(date)"

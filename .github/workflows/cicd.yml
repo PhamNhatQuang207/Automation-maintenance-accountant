@@ -1,17 +1,20 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # CI/CD Pipeline — UNC AutoBot
 #
-# Các job:
-#  1. test    → Chạy pytest trên Python 3.10
-#  2. build   → Build & push Docker images lên GitHub Container Registry (GHCR)
-#  3. deploy  → SSH vào server và pull image mới, restart compose (optional)
+# Job flow:
+#  1. test    → Chạy 49 pytest cases (mọi push/PR)
+#  2. build   → Build & push Docker images lên GHCR (chỉ khi push main)
+#  3. deploy  → SSH vào server (chỉ chạy khi secret DEPLOY_HOST được cấu hình)
 #
 # Secrets cần cấu hình trong GitHub → Settings → Secrets and variables → Actions:
-#   CLIENT_SECRET_JSON  : Toàn bộ nội dung file client_secret.json (base64 encode)
-#   FLASK_SECRET_KEY    : Chuỗi bí mật Flask
-#   DEPLOY_HOST         : IP hoặc hostname của server deploy (SSH)
-#   DEPLOY_USER         : Username SSH trên server
-#   DEPLOY_SSH_KEY      : Private key SSH (PEM) để kết nối server
+#   CLIENT_SECRET_JSON  : base64 encode của toàn bộ nội dung client_secret.json
+#                         Tạo bằng: cat backend/client_secret.json | base64 | tr -d '\n'
+#   FLASK_SECRET_KEY    : Chuỗi bí mật Flask production
+#
+#   [Tùy chọn - chỉ cần khi có server deploy thật]
+#   DEPLOY_HOST         : IP hoặc hostname server (ví dụ: 123.45.67.89)
+#   DEPLOY_USER         : Username SSH (ví dụ: ubuntu)
+#   DEPLOY_SSH_KEY      : Private key SSH dạng PEM
 #   DEPLOY_PATH         : Đường dẫn thư mục dự án trên server (ví dụ: /opt/unc-webapp)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -22,18 +25,27 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Cho phép trigger deploy thủ công từ GitHub UI
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deploy to server (skip tests)'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/unc-webapp-backend
   IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/unc-webapp-frontend
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # JOB 1: UNIT TESTS
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
   test:
-    name: Unit Tests (pytest)
+    name: "🧪 Unit Tests (pytest)"
     runs-on: ubuntu-latest
 
     steps:
@@ -52,7 +64,7 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pytest
 
-      # Tạo file client_secret.json giả để app.py không crash khi import
+      # Tạo mock client_secret.json — app.py cần file này khi import
       - name: Create mock client_secret.json
         run: |
           cat > backend/client_secret.json << 'EOF'
@@ -82,17 +94,22 @@ jobs:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # JOB 2: BUILD & PUSH DOCKER IMAGES
-# Chỉ chạy khi push lên main (không chạy với PR)
+# Chỉ chạy khi push lên main hoặc workflow_dispatch
 # ─────────────────────────────────────────────────────────────────────────────
   build:
-    name: Build & Push Docker Images
+    name: "🐳 Build & Push Docker Images"
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
 
     permissions:
       contents: read
       packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta_backend.outputs.version }}
 
     steps:
       - name: Checkout code
@@ -108,12 +125,30 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Tạo client_secret.json thật từ Secret (base64 encoded)
-      - name: Restore client_secret.json from secret
+      # Khôi phục client_secret.json từ secret (base64 encoded)
+      # Nếu secret chưa được cấu hình, dùng mock để build không crash
+      - name: Restore client_secret.json
+        env:
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
         run: |
-          echo "${{ secrets.CLIENT_SECRET_JSON }}" | base64 -d > backend/client_secret.json
+          if [ -n "$CLIENT_SECRET_JSON" ]; then
+            echo "$CLIENT_SECRET_JSON" | base64 -d > backend/client_secret.json
+            echo "✅ Restored real client_secret.json from secret"
+          else
+            echo "⚠️  Secret CLIENT_SECRET_JSON not set, using mock for build"
+            cat > backend/client_secret.json << 'EOF'
+          {
+            "web": {
+              "client_id": "mock_client_id.apps.googleusercontent.com",
+              "client_secret": "mock_client_secret",
+              "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+              "token_uri": "https://oauth2.googleapis.com/token",
+              "redirect_uris": ["http://localhost/auth/google/callback"]
+            }
+          }
+          EOF
+          fi
 
-      # Tạo metadata tags: latest + commit SHA
       - name: Extract Docker metadata (backend)
         id: meta_backend
         uses: docker/metadata-action@v5
@@ -156,38 +191,72 @@ jobs:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# JOB 3: DEPLOY (SSH vào server, pull image mới, restart)
-# Chỉ chạy khi build thành công.
-# Bỏ comment khi bạn đã có server deploy thật sự.
+# JOB 3: DEPLOY — Tự động skip nếu chưa cấu hình secrets SSH
 # ─────────────────────────────────────────────────────────────────────────────
   deploy:
-    name: Deploy to Server
+    name: "🚀 Deploy to Server"
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
     environment: production
 
     steps:
+      # Kiểm tra xem secrets SSH đã được cấu hình chưa
+      - name: Check deployment secrets
+        id: check_secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⏭️  DEPLOY_HOST secret not configured — skipping deploy"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "✅ Deployment secrets found — proceeding with deploy"
+          fi
+
       - name: Deploy via SSH
+        if: steps.check_secrets.outputs.skip == 'false'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 22
+          timeout: 60s
+          command_timeout: 10m
           script: |
             set -e
-            cd ${{ secrets.DEPLOY_PATH }}
 
-            # Pull images mới nhất từ GHCR
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Chuyển tới thư mục dự án
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            # Login GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # Pull images mới
             docker pull ${{ env.IMAGE_BACKEND }}:latest
             docker pull ${{ env.IMAGE_FRONTEND }}:latest
 
-            # Restart stack với image mới
-            docker compose down
+            # Cập nhật docker-compose.yml để dùng image từ GHCR thay vì build local
+            # (File compose trên server cần có image: ghcr.io/... thay vì build: ...)
+            docker compose down --remove-orphans
             docker compose up -d --no-build
 
-            # Dọn dẹp image cũ
+            # Dọn dẹp image cũ để tiết kiệm dung lượng
             docker image prune -f
 
-            echo "✅ Deployed successfully at $(date)"
+            echo "✅ Deployed successfully — $(date)"
+
+      - name: Skip notice
+        if: steps.check_secrets.outputs.skip == 'true'
+        run: |
+          echo "ℹ️  Deploy job skipped: DEPLOY_HOST secret is not configured."
+          echo "ℹ️  To enable deployment, add these secrets in GitHub → Settings → Secrets:"
+          echo "     - DEPLOY_HOST"
+          echo "     - DEPLOY_USER"
+          echo "     - DEPLOY_SSH_KEY"
+          echo "     - DEPLOY_PATH"

@@ -7,11 +7,12 @@ services:
       dockerfile: backend/Dockerfile
     container_name: unc_backend
     volumes:
-      # Mount thư mục templates để Flask render được HTML
+      # Mount toàn bộ mã nguồn backend và templates để phát triển local (live reload)
+      - ./backend:/app/backend
       - ./frontend/templates:/app/frontend/templates
-      # Nếu trong code backend tạo ra file UNC lưu ở /tmp, ta cũng có thể mount volume ra ngoài
     environment:
-      - FLASK_ENV=production
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
       - PYTHONIOENCODING=utf-8
     expose:
       - "5000"
@@ -24,6 +25,9 @@ services:
     container_name: unc_frontend
     ports:
       - "80:80"
+    volumes:
+      # Mount thư mục static để Nginx cập nhật file CSS/JS ngay lập tức khi chỉnh sửa
+      - ./frontend/static:/usr/share/nginx/html/static
     depends_on:
       - backend
     restart: unless-stopped

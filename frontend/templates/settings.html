@@ -2,7 +2,8 @@
 {% block content %}
 <div class="dashboard-container">
     <h2>Cấu Hình Hệ Thống</h2>
-    <p style="color: var(--text-muted); margin-bottom: 24px;">Thiết lập khóa API cá nhân của bạn để sử dụng tính năng trích xuất dữ liệu.</p>
+    <p style="color: var(--text-muted); margin-bottom: 24px;">Thiết lập khóa API cá nhân của bạn để sử dụng tính năng
+        trích xuất dữ liệu.</p>
 
     <div class="glass-panel" style="max-width: 600px;">
         {% if success %}
@@ -10,26 +11,70 @@
             <i data-feather="check-circle"></i> Đã lưu cấu hình thành công!
         </div>
         {% endif %}
-        
+
         <form method="POST" action="{{ url_for('settings') }}">
             <div class="form-group">
                 <label>Nhà cung cấp AI (OCR Model)</label>
                 <select class="form-control" name="ocr_provider" style="background: rgba(0,0,0,0.5);">
-                    <option value="gemini" {% if ocr_provider == 'gemini' %}selected{% endif %}>Google Gemini (1.5 Pro / Flash)</option>
-                    <option value="openai" {% if ocr_provider == 'openai' %}selected{% endif %}>OpenAI (GPT-4o)</option>
+                    <option value="gemini" {% if ocr_provider=='gemini' %}selected{% endif %}>Google Gemini (2.5 Flash)
+                    </option>
+                    <option value="openai" {% if ocr_provider=='openai' %}selected{% endif %}>OpenAI (GPT-4o)</option>
                 </select>
             </div>
-            
+
             <div class="form-group">
                 <label>API Key</label>
-                <input type="password" class="form-control" name="api_key" value="{{ api_key }}" placeholder="Nhập API Key của bạn..." required>
-                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
-                    * API Key được lưu an toàn trên phiên làm việc (Session) của bạn.
+                <input type="password" class="form-control" name="api_key" value="{{ api_key }}"
+                    placeholder="Nhập API Key của bạn..." required>
+                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 8px;">
+                    <div style="margin-bottom: 4px;">* API Key được lưu an toàn trên phiên làm việc (Session) của bạn.
+                    </div>
+
+                    <div id="gemini-help">
+                        <i data-feather="info"
+                            style="width: 14px; height: 14px; vertical-align: middle; margin-bottom: 2px;"></i>
+                        Chưa có khóa? <a href="https://aistudio.google.com/api-keys" target="_blank"
+                            rel="noopener noreferrer"
+                            style="color: var(--primary-color); text-decoration: none; font-weight: 500;">Tạo Gemini API
+                            Key miễn phí tại Google AI Studio</a>
+                    </div>
+
+                    <div id="openai-help" style="display: none;">
+                        <i data-feather="info"
+                            style="width: 14px; height: 14px; vertical-align: middle; margin-bottom: 2px;"></i>
+                        Chưa có khóa? <a href="https://platform.openai.com/api-keys" target="_blank"
+                            rel="noopener noreferrer"
+                            style="color: var(--primary-color); text-decoration: none; font-weight: 500;">Tạo OpenAI API
+                            Key tại OpenAI Platform</a>
+                    </div>
                 </div>
             </div>
-            
+
             <button type="submit" class="btn btn-primary"><i data-feather="save"></i> Lưu cấu hình</button>
         </form>
     </div>
 </div>
+
+<script>
+    (function () {
+        const providerSelect = document.querySelector('select[name="ocr_provider"]');
+        const geminiHelp = document.getElementById('gemini-help');
+        const openaiHelp = document.getElementById('openai-help');
+
+        if (!providerSelect || !geminiHelp || !openaiHelp) return;
+
+        function toggleHelp() {
+            if (providerSelect.value === 'gemini') {
+                geminiHelp.style.display = 'block';
+                openaiHelp.style.display = 'none';
+            } else {
+                geminiHelp.style.display = 'none';
+                openaiHelp.style.display = 'block';
+            }
+        }
+
+        providerSelect.addEventListener('change', toggleHelp);
+        toggleHelp(); // Khởi tạo trạng thái ban đầu
+    })();
+</script>
 {% endblock %}

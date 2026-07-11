@@ -9,6 +9,10 @@ RUN pip install --no-cache-dir -r requirements.txt gunicorn
 # Copy mã nguồn backend
 COPY backend/ .
 
+# Copy giao diện và file tĩnh của frontend vào container
+COPY frontend/templates /app/frontend/templates
+COPY frontend/static /app/frontend/static
+
 # Expose port (Gunicorn sẽ chạy ở 5000)
 EXPOSE 5000
 

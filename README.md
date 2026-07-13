@@ -197,3 +197,8 @@ docker compose run --rm --no-deps backend sh -c "pip install -q pytest && python
 | `Không tìm thấy file ảnh hoặc PDF` | Thư mục Drive phải chứa file ảnh/PDF và đã chia sẻ đúng tài khoản đăng nhập |
 | Không mở được http://localhost | Kiểm tra cổng 80 có bị ứng dụng khác chiếm không; xem `docker compose logs -f` |
 | Muốn đổi model AI | Vào **Cài đặt** chọn Gemini 2.5 Pro (chính xác hơn) hoặc Flash (nhanh, miễn phí) |
+| Trên **Mac (Apple Silicon M1/M2/M3)** báo lỗi `platform (linux/amd64) does not match ... arm64` hoặc `exec format error` | Luôn chạy bằng `docker compose up -d --build` để **build ngay trên máy** (tự khớp kiến trúc arm64). **KHÔNG** `docker pull` các image `amd64` từ GHCR. Ảnh nền `python:3.12-slim` và `nginx:alpine` đều hỗ trợ arm64 nên build local chạy tốt. |
+
+> **Ghi chú về CI/CD:** các workflow `cicd.yml` (build & push GHCR) và `deploy.yml`
+> (deploy qua SSH) tạo image kiến trúc `amd64`, dùng cho triển khai server. Khi
+> chạy **trên máy Mac cá nhân**, hãy build local như trên — không dùng image GHCR.

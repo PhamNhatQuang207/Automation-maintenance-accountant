@@ -1,34 +1,67 @@
 import os
+import secrets
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file
+from flask_session import Session
 from core.extractor import extract_information_from_files
 from core.validator import validate_payment_record
 
 app = Flask(__name__, 
             template_folder='../frontend/templates', 
             static_folder='../frontend/static')
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'bqt_parkhill1_secure_key_123')
+# Khóa ký session: BẮT BUỘC lấy từ biến môi trường. KHÔNG dùng khóa cố định
+# (khóa cố định cho phép bất kỳ ai giả mạo cookie session). Nếu thiếu, sinh khóa
+# ngẫu nhiên tạm thời — session sẽ mất khi restart, kèm cảnh báo rõ ràng.
+_secret = os.environ.get('FLASK_SECRET_KEY')
+if not _secret:
+    _secret = secrets.token_hex(32)
+    print("[WARN] FLASK_SECRET_KEY chưa được đặt — dùng khóa ngẫu nhiên tạm thời "
+          "(session sẽ mất khi restart). Hãy đặt FLASK_SECRET_KEY ở môi trường production.")
+app.secret_key = _secret
 
-# Cấu hình giả lập cho giai đoạn thiết kế UI
-app.config['DEMO_MODE'] = True
+# Cookie an toàn: chặn JS đọc cookie (HttpOnly), hạn chế gửi cross-site (SameSite=Lax
+# giảm thiểu CSRF), và chỉ gửi qua HTTPS khi COOKIE_SECURE=true (bật ở production).
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE', 'false').lower() in ('1', 'true'),
+)
+
+# Lưu session phía SERVER: token OAuth Google và API key KHÔNG còn nằm trong cookie
+# trình duyệt (cookie chỉ chứa session id đã ký). Backend 'filesystem' không cần hạ tầng.
+app.config.update(
+    SESSION_TYPE='filesystem',
+    SESSION_FILE_DIR=os.environ.get('SESSION_FILE_DIR', '/tmp/unc_flask_session'),
+    SESSION_PERMANENT=False,
+)
+Session(app)
+
+# Cấu hình giả lập cho giai đoạn thiết kế UI (mặc định TẮT; bật bằng DEMO_MODE=true)
+app.config['DEMO_MODE'] = os.environ.get('DEMO_MODE', 'false').lower() in ('1', 'true')
 
 import io
 import json
 import urllib.parse
 import requests
 
-# Load Google Client Credentials
-CLIENT_SECRET_FILE = os.path.join(os.path.dirname(__file__), 'client_secret.json')
-with open(CLIENT_SECRET_FILE, 'r') as f:
-    client_config = json.load(f)['web']
+# Thông tin OAuth Google: ưu tiên biến môi trường; nếu thiếu thì fallback đọc file
+# client_secret.json (chỉ dùng cho dev — file này đã được .gitignore, KHÔNG commit).
+CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+AUTH_URI = os.environ.get('GOOGLE_AUTH_URI', 'https://accounts.google.com/o/oauth2/auth')
+TOKEN_URI = os.environ.get('GOOGLE_TOKEN_URI', 'https://oauth2.googleapis.com/token')
 
-CLIENT_ID = client_config['client_id']
-CLIENT_SECRET = client_config['client_secret']
-AUTH_URI = client_config['auth_uri']
-TOKEN_URI = client_config['token_uri']
+CLIENT_SECRET_FILE = os.path.join(os.path.dirname(__file__), 'client_secret.json')
+if not (CLIENT_ID and CLIENT_SECRET) and os.path.exists(CLIENT_SECRET_FILE):
+    with open(CLIENT_SECRET_FILE, 'r') as f:
+        client_config = json.load(f)['web']
+    CLIENT_ID = CLIENT_ID or client_config.get('client_id')
+    CLIENT_SECRET = CLIENT_SECRET or client_config.get('client_secret')
+    AUTH_URI = client_config.get('auth_uri', AUTH_URI)
+    TOKEN_URI = client_config.get('token_uri', TOKEN_URI)
 
 # URL chuyển hướng sau khi đăng nhập thành công
 # Lưu ý: Khi chạy Docker qua Nginx ở cổng 80, REDIRECT_URI nên là cổng 80
-REDIRECT_URI = 'http://localhost/auth/google/callback'
+REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI', 'http://localhost/auth/google/callback')
 
 @app.route('/')
 def index():
@@ -238,4 +271,4 @@ def api_generate_unc():
     )
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true'), port=5000)

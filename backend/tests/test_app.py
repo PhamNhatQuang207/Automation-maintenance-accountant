@@ -75,7 +75,7 @@ def logged_in_client(client, app):
             'refresh_token': 'fake_refresh_token'
         }
         sess['api_key'] = 'AIzaSyTest_VALID_KEY_1234567890'
-        sess['ocr_provider'] = 'gemini'
+        sess['ocr_model'] = 'gemini-2.5-pro'
     return client
 
 
@@ -229,59 +229,6 @@ class TestApiKeyValidation:
         assert res.status_code == 500
         data = res.get_json()
         assert 'API key not valid' in data['message'] or 'Gemini' in data['message']
-
-    @patch('core.google_connector.download_file_to_bytes')
-    @patch('app.extract_information_from_files')
-    @patch('app.list_files_in_folder')
-    @patch('app.read_sheet_data')
-    @patch('app.get_google_services')
-    def test_gemini_key_used_with_openai_provider(self, mock_gservices, mock_sheet, mock_files, mock_extract, mock_download, logged_in_client):
-        """User nhập API Key của Google nhưng chọn provider OpenAI → OpenAI trả 401."""
-        mock_gservices.return_value = (MagicMock(), MagicMock())
-        mock_files.return_value = [{'id': '1', 'name': 'test.jpg', 'mimeType': 'image/jpeg'}]
-        mock_sheet.return_value = [['A', 'B']]
-        mock_download.return_value = b'fake_image_bytes'
-        mock_extract.side_effect = Exception("Lỗi gọi OpenAI API (Status 401): Incorrect API key provided: AIzaSy...")
-
-        # Chuyển provider sang openai nhưng giữ key kiểu Google
-        with logged_in_client.session_transaction() as sess:
-            sess['ocr_provider'] = 'openai'
-            sess['api_key'] = 'AIzaSyTest_THIS_IS_A_GOOGLE_KEY'
-
-        res = logged_in_client.post('/api/analyze',
-                                    data=json.dumps({
-                                        'drive_link': 'https://drive.google.com/drive/folders/abc123',
-                                        'sheet_link': 'https://docs.google.com/spreadsheets/d/xyz123'
-                                    }),
-                                    content_type='application/json')
-        assert res.status_code == 500
-        assert 'Incorrect API key' in res.get_json()['message'] or 'OpenAI' in res.get_json()['message']
-
-    @patch('core.google_connector.download_file_to_bytes')
-    @patch('app.extract_information_from_files')
-    @patch('app.list_files_in_folder')
-    @patch('app.read_sheet_data')
-    @patch('app.get_google_services')
-    def test_openai_key_used_with_gemini_provider(self, mock_gservices, mock_sheet, mock_files, mock_extract, mock_download, logged_in_client):
-        """User nhập API Key của OpenAI nhưng chọn provider Gemini → Gemini trả 400."""
-        mock_gservices.return_value = (MagicMock(), MagicMock())
-        mock_files.return_value = [{'id': '1', 'name': 'test.jpg', 'mimeType': 'image/jpeg'}]
-        mock_sheet.return_value = [['A', 'B']]
-        mock_download.return_value = b'fake_image_bytes'
-        mock_extract.side_effect = Exception("Lỗi gọi Gemini API (Status 400): API key not valid. Please pass a valid API key.")
-
-        with logged_in_client.session_transaction() as sess:
-            sess['ocr_provider'] = 'gemini'
-            sess['api_key'] = 'sk-proj-OpenAIKey1234567890'
-
-        res = logged_in_client.post('/api/analyze',
-                                    data=json.dumps({
-                                        'drive_link': 'https://drive.google.com/drive/folders/abc123',
-                                        'sheet_link': 'https://docs.google.com/spreadsheets/d/xyz123'
-                                    }),
-                                    content_type='application/json')
-        assert res.status_code == 500
-        assert 'API key not valid' in res.get_json()['message']
 
 
 # ════════════════════════════════════════════════════
@@ -647,61 +594,45 @@ class TestExtractor:
         with pytest.raises(ValueError, match="API Key"):
             extract_information_from_files([], None, 'gemini')
 
-    @patch('core.extractor.requests.post')
-    def test_gemini_returns_non_200(self, mock_post):
-        """Gemini API trả HTTP 500 → raise Exception."""
+    @staticmethod
+    def _make_mock_client(generate_text=None, generate_side_effect=None):
+        """Tạo mock genai.Client: files.upload/delete + models.generate_content."""
+        mock_client = MagicMock()
+        uploaded = MagicMock()
+        uploaded.name = 'files/abc123'
+        mock_client.files.upload.return_value = uploaded
+        if generate_side_effect is not None:
+            mock_client.models.generate_content.side_effect = generate_side_effect
+        else:
+            resp = MagicMock()
+            resp.text = generate_text
+            mock_client.models.generate_content.return_value = resp
+        return mock_client
+
+    @patch('core.extractor.genai.Client')
+    def test_gemini_api_error(self, mock_client_cls):
+        """generate_content ném lỗi → bọc thành 'Lỗi gọi Gemini API'."""
         from core.extractor import extract_information_from_files
-        mock_post.return_value = MagicMock(status_code=500, text='Internal Server Error')
+        mock_client_cls.return_value = self._make_mock_client(
+            generate_side_effect=Exception("500 Internal Server Error"))
 
         files = [{'name': 'test.jpg', 'mimeType': 'image/jpeg', 'content': b'\xff\xd8'}]
         with pytest.raises(Exception, match="Lỗi gọi Gemini API"):
-            extract_information_from_files(files, 'fake_key', 'gemini')
+            extract_information_from_files(files, 'fake_key', 'gemini-2.5-pro')
 
-    @patch('core.extractor.requests.post')
-    def test_gemini_returns_invalid_json(self, mock_post):
-        """Gemini trả text không phải JSON → raise Exception."""
+    @patch('core.extractor.genai.Client')
+    def test_gemini_returns_invalid_json(self, mock_client_cls):
+        """Gemini trả text không phải JSON → raise Exception 'Lỗi phân tích'."""
         from core.extractor import extract_information_from_files
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            'candidates': [{'content': {'parts': [{'text': 'Tôi không hiểu yêu cầu'}]}}]
-        }
-        mock_response.text = 'Tôi không hiểu yêu cầu'
-        mock_post.return_value = mock_response
+        mock_client_cls.return_value = self._make_mock_client(
+            generate_text='Tôi không hiểu yêu cầu')
 
         files = [{'name': 'test.jpg', 'mimeType': 'image/jpeg', 'content': b'\xff\xd8'}]
         with pytest.raises(Exception, match="Lỗi phân tích"):
-            extract_information_from_files(files, 'fake_key', 'gemini')
+            extract_information_from_files(files, 'fake_key', 'gemini-2.5-pro')
 
-    @patch('core.extractor.requests.post')
-    def test_gemini_returns_empty_candidates(self, mock_post):
-        """Gemini trả candidates rỗng → KeyError → Exception."""
-        from core.extractor import extract_information_from_files
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {'candidates': []}
-        mock_response.text = '{"candidates": []}'
-        mock_post.return_value = mock_response
-
-        files = [{'name': 'test.jpg', 'mimeType': 'image/jpeg', 'content': b'\xff\xd8'}]
-        with pytest.raises(Exception):
-            extract_information_from_files(files, 'fake_key', 'gemini')
-
-    @patch('core.extractor.requests.post')
-    def test_openai_returns_401_wrong_key(self, mock_post):
-        """OpenAI API trả 401 khi key sai → raise Exception."""
-        from core.extractor import extract_information_from_files
-        mock_post.return_value = MagicMock(
-            status_code=401,
-            text='{"error": {"message": "Incorrect API key provided: AIzaSy..."}}'
-        )
-
-        files = [{'name': 'test.jpg', 'mimeType': 'image/jpeg', 'content': b'\xff\xd8'}]
-        with pytest.raises(Exception, match="Lỗi gọi OpenAI API"):
-            extract_information_from_files(files, 'AIzaSy_wrong_key', 'openai')
-
-    @patch('core.extractor.requests.post')
-    def test_gemini_success_returns_dict(self, mock_post):
+    @patch('core.extractor.genai.Client')
+    def test_gemini_success_returns_dict(self, mock_client_cls):
         """Gemini trả JSON hợp lệ → parse thành công → trả về dict."""
         from core.extractor import extract_information_from_files
         expected = {
@@ -711,17 +642,24 @@ class TestExtractor:
             'amount': 10000000,
             'remarks': 'Thanh toan test',
         }
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            'candidates': [{'content': {'parts': [{'text': json.dumps(expected)}]}}]
-        }
-        mock_post.return_value = mock_response
+        mock_client = self._make_mock_client(generate_text=json.dumps(expected))
+        mock_client_cls.return_value = mock_client
 
         files = [{'name': 'test.jpg', 'mimeType': 'image/jpeg', 'content': b'\xff\xd8'}]
-        result = extract_information_from_files(files, 'valid_key', 'gemini')
+        result = extract_information_from_files(files, 'valid_key', 'gemini-2.5-pro')
         assert result['beneficiary'] == 'CONG TY ABC'
         assert result['amount'] == 10000000
+
+    @patch('core.extractor.genai.Client')
+    def test_gemini_cleans_up_uploaded_files(self, mock_client_cls):
+        """File đã upload phải được xóa sau khi trích xuất (dù thành công)."""
+        from core.extractor import extract_information_from_files
+        mock_client = self._make_mock_client(generate_text='{"beneficiary": "X"}')
+        mock_client_cls.return_value = mock_client
+
+        files = [{'name': 'test.jpg', 'mimeType': 'image/jpeg', 'content': b'\xff\xd8'}]
+        extract_information_from_files(files, 'valid_key', 'gemini-2.5-pro')
+        mock_client.files.delete.assert_called_once_with(name='files/abc123')
 
 
 # ════════════════════════════════════════════════════
@@ -778,17 +716,17 @@ class TestSettings:
     def test_save_api_key_in_session(self, logged_in_client):
         """POST /settings → lưu api_key vào session."""
         res = logged_in_client.post('/settings',
-                                    data={'api_key': 'new_test_key_123', 'ocr_provider': 'gemini'},
+                                    data={'api_key': 'new_test_key_123', 'ocr_model': 'gemini-2.5-pro'},
                                     follow_redirects=False)
         assert res.status_code == 302  # redirect về settings?success=True
 
         with logged_in_client.session_transaction() as sess:
             assert sess['api_key'] == 'new_test_key_123'
-            assert sess['ocr_provider'] == 'gemini'
+            assert sess['ocr_model'] == 'gemini-2.5-pro'
 
-    def test_switch_provider_to_openai(self, logged_in_client):
-        """POST /settings chuyển provider sang openai."""
+    def test_switch_model_to_flash(self, logged_in_client):
+        """POST /settings chuyển model sang gemini-2.5-flash."""
         logged_in_client.post('/settings',
-                              data={'api_key': 'sk-openai-key', 'ocr_provider': 'openai'})
+                              data={'api_key': 'AIzaSy-key', 'ocr_model': 'gemini-2.5-flash'})
         with logged_in_client.session_transaction() as sess:
-            assert sess['ocr_provider'] == 'openai'
+            assert sess['ocr_model'] == 'gemini-2.5-flash'

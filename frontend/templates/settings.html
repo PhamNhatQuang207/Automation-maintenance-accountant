@@ -14,11 +14,12 @@
 
         <form method="POST" action="{{ url_for('settings') }}">
             <div class="form-group">
-                <label>Nhà cung cấp AI (OCR Model)</label>
-                <select class="form-control" name="ocr_provider" style="background: rgba(0,0,0,0.5);">
-                    <option value="gemini" {% if ocr_provider=='gemini' %}selected{% endif %}>Google Gemini (2.5 Flash)
-                    </option>
-                    <option value="openai" {% if ocr_provider=='openai' %}selected{% endif %}>OpenAI (GPT-4o)</option>
+                <label>Model Gemini (OCR)</label>
+                <select class="form-control" name="ocr_model" style="background: rgba(0,0,0,0.5);">
+                    <option value="gemini-2.5-flash" {% if ocr_model=='gemini-2.5-flash' %}selected{% endif %}>Gemini 2.5
+                        Flash (Nhanh & miễn phí)</option>
+                    <option value="gemini-2.5-pro" {% if ocr_model=='gemini-2.5-pro' %}selected{% endif %}>Gemini 2.5 Pro
+                        (Độ chính xác cao)</option>
                 </select>
             </div>
 
@@ -38,15 +39,6 @@
                             style="color: var(--primary-color); text-decoration: none; font-weight: 500;">Tạo Gemini API
                             Key miễn phí tại Google AI Studio</a>
                     </div>
-
-                    <div id="openai-help" style="display: none;">
-                        <i data-feather="info"
-                            style="width: 14px; height: 14px; vertical-align: middle; margin-bottom: 2px;"></i>
-                        Chưa có khóa? <a href="https://platform.openai.com/api-keys" target="_blank"
-                            rel="noopener noreferrer"
-                            style="color: var(--primary-color); text-decoration: none; font-weight: 500;">Tạo OpenAI API
-                            Key tại OpenAI Platform</a>
-                    </div>
                 </div>
             </div>
 
@@ -54,27 +46,4 @@
         </form>
     </div>
 </div>
-
-<script>
-    (function () {
-        const providerSelect = document.querySelector('select[name="ocr_provider"]');
-        const geminiHelp = document.getElementById('gemini-help');
-        const openaiHelp = document.getElementById('openai-help');
-
-        if (!providerSelect || !geminiHelp || !openaiHelp) return;
-
-        function toggleHelp() {
-            if (providerSelect.value === 'gemini') {
-                geminiHelp.style.display = 'block';
-                openaiHelp.style.display = 'none';
-            } else {
-                geminiHelp.style.display = 'none';
-                openaiHelp.style.display = 'block';
-            }
-        }
-
-        providerSelect.addEventListener('change', toggleHelp);
-        toggleHelp(); // Khởi tạo trạng thái ban đầu
-    })();
-</script>
 {% endblock %}

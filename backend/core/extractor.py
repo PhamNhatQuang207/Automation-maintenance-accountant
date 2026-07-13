@@ -1,6 +1,10 @@
-import base64
+import io
 import json
-import requests
+from typing import Optional
+
+from pydantic import BaseModel
+from google import genai
+from google.genai import types
 
 PROMPT = """Bạn là chuyên gia kế toán giám sát tài chính của Ban Quản trị Park Hill 1 (Tòa P01).
 Dưới đây là các tài liệu hình ảnh/PDF liên quan đến 1 bộ hồ sơ thanh toán bảo trì (có thể bao gồm: Tờ trình đề xuất, Phê duyệt BQT, Hợp đồng/Báo giá, Biên bản nghiệm thu, Đề nghị thanh toán, Hóa đơn VAT).
@@ -31,94 +35,79 @@ Cấu trúc JSON yêu cầu:
 }
 """
 
-def extract_information_from_files(files_list: list, api_key: str, provider: str = "gemini") -> dict:
+# Model mặc định là Flash (có gói miễn phí); có thể chọn Pro khi cần độ chính xác cao hơn.
+DEFAULT_MODEL = "gemini-2.5-flash"
+
+
+class PaymentRecord(BaseModel):
+    """Cấu trúc dữ liệu 1 bộ hồ sơ thanh toán, dùng để ép Gemini trả về JSON đúng schema."""
+    sheet: str
+    beneficiary: str
+    account: str
+    bank: str
+    address: str = ""
+    id_no: str = ""
+    amount: Optional[int] = None
+    amount_words: str = ""
+    remarks: str = ""
+    proposal_date: Optional[str] = None
+    approval_date: Optional[str] = None
+    contract_date: Optional[str] = None
+    acceptance_date: Optional[str] = None
+    vat_date: Optional[str] = None
+    vat_amount: Optional[int] = None
+    vat_invoice_no: Optional[str] = None
+    request_date: Optional[str] = None
+
+
+def extract_information_from_files(files_list: list, api_key: str, model: str = DEFAULT_MODEL) -> dict:
     """
-    Trích xuất thông tin hồ sơ bằng cách gửi toàn bộ danh sách files sang Gemini hoặc OpenAI.
+    Trích xuất thông tin hồ sơ bằng cách gửi toàn bộ danh sách files sang Gemini (multimodal).
     files_list: danh sách dict gồm {'name': ..., 'mimeType': ..., 'content': bytes}
+    model: tên model Gemini (mặc định gemini-2.5-pro, có thể chọn gemini-2.5-flash).
     """
     if not api_key:
         raise ValueError("Chưa cấu hình API Key trong mục Cài đặt.")
 
-    if provider == "openai":
-        return _extract_openai(files_list, api_key)
-    else:
-        return _extract_gemini(files_list, api_key)
+    return _extract_gemini(files_list, api_key, model or DEFAULT_MODEL)
 
-def _extract_gemini(files_list, api_key):
-    # Gemini 2.5 Flash hỗ trợ Multimodal (nhiều ảnh/PDF cùng lúc)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-    
-    parts = [{"text": PROMPT}]
-    
-    for file in files_list:
-        encoded_content = base64.b64encode(file['content']).decode('utf-8')
-        parts.append({
-            "inlineData": {
-                "mimeType": file['mimeType'],
-                "data": encoded_content
-            }
-        })
-        
-    payload = {
-        "contents": [{
-            "parts": parts
-        }],
-        "generationConfig": {
-            "responseMimeType": "application/json"
-        }
-    }
-    
-    headers = {'Content-Type': 'application/json'}
-    res = requests.post(url, headers=headers, json=payload)
-    
-    if res.status_code != 200:
-        raise Exception(f"Lỗi gọi Gemini API (Status {res.status_code}): {res.text}")
-        
-    result_json = res.json()
-    try:
-        text_response = result_json['candidates'][0]['content']['parts'][0]['text']
-        return json.loads(text_response)
-    except (KeyError, IndexError, ValueError) as e:
-        raise Exception(f"Lỗi phân tích phản hồi JSON từ Gemini: {str(e)}. Phản hồi gốc: {res.text}")
 
-def _extract_openai(files_list, api_key):
-    url = "https://api.openai.com/v1/chat/completions"
-    
-    messages_content = [{"type": "text", "text": PROMPT}]
-    
-    for file in files_list:
-        # OpenAI chỉ nhận ảnh qua URL base64 trực tiếp (không hỗ trợ PDF trực tiếp qua API chat)
-        if 'image' not in file['mimeType']:
-            continue
-        encoded_content = base64.b64encode(file['content']).decode('utf-8')
-        messages_content.append({
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:{file['mimeType']};base64,{encoded_content}"
-            }
-        })
-        
-    payload = {
-        "model": "gpt-4o",
-        "messages": [{
-            "role": "user",
-            "content": messages_content
-        }],
-        "response_format": {"type": "json_object"}
-    }
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-    
-    res = requests.post(url, headers=headers, json=payload)
-    if res.status_code != 200:
-        raise Exception(f"Lỗi gọi OpenAI API (Status {res.status_code}): {res.text}")
-        
-    result_json = res.json()
+def _extract_gemini(files_list, api_key, model):
+    # Dùng SDK chính thức + File API: upload từng file thay vì nhúng base64 trực tiếp,
+    # tránh giới hạn ~20MB/request khi bộ hồ sơ có nhiều trang (100+ trang).
+    client = genai.Client(api_key=api_key)
+
+    uploaded = []
     try:
-        text_response = result_json['choices'][0]['message']['content']
-        return json.loads(text_response)
-    except (KeyError, IndexError, ValueError) as e:
-        raise Exception(f"Lỗi phân tích phản hồi JSON từ OpenAI: {str(e)}")
+        for file in files_list:
+            buf = io.BytesIO(file['content'])
+            uploaded.append(client.files.upload(
+                file=buf,
+                config=types.UploadFileConfig(mime_type=file['mimeType'])
+            ))
+
+        response = client.models.generate_content(
+            model=model,
+            contents=[PROMPT, *uploaded],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=PaymentRecord,
+            ),
+        )
+
+        try:
+            return json.loads(response.text)
+        except (TypeError, ValueError) as e:
+            raise Exception(f"Lỗi phân tích phản hồi JSON từ Gemini: {str(e)}. Phản hồi gốc: {response.text}")
+    except Exception as e:
+        # Giữ nguyên các Exception đã có message tiếng Việt, bọc phần còn lại.
+        if str(e).startswith("Lỗi"):
+            raise
+        raise Exception(f"Lỗi gọi Gemini API: {str(e)}")
+    finally:
+        # Dọn dẹp file đã upload để không tồn đọng (File API giữ 48h).
+        for f in uploaded:
+            try:
+                client.files.delete(name=f.name)
+            except Exception:
+                pass

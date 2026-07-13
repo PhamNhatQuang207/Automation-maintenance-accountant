@@ -115,13 +115,13 @@ def settings():
         
     if request.method == 'POST':
         session['api_key'] = request.form.get('api_key')
-        session['ocr_provider'] = request.form.get('ocr_provider')
+        session['ocr_model'] = request.form.get('ocr_model')
         # In real app, save this securely
         return redirect(url_for('settings', success=True))
-        
-    return render_template('settings.html', 
+
+    return render_template('settings.html',
                            api_key=session.get('api_key', ''),
-                           ocr_provider=session.get('ocr_provider', 'gemini'),
+                           ocr_model=session.get('ocr_model', 'gemini-2.5-flash'),
                            success=request.args.get('success'))
 
 from core.google_connector import (
@@ -164,7 +164,7 @@ def api_analyze():
         
         # Kiểm tra cấu hình API Key
         api_key = session.get('api_key')
-        ocr_provider = session.get('ocr_provider', 'gemini')
+        ocr_model = session.get('ocr_model', 'gemini-2.5-flash')
         if not api_key:
             return jsonify({"status": "error", "message": "Vui lòng cấu hình API Key trong mục Cài đặt trước khi phân tích"}), 400
             
@@ -181,8 +181,8 @@ def api_analyze():
             })
             
         # 4. Gửi toàn bộ ảnh/PDF sang AI để trích xuất thông tin
-        print(f"[API] Đang gửi {len(downloaded_files)} file sang {ocr_provider} để xử lý...")
-        data = extract_information_from_files(downloaded_files, api_key, ocr_provider)
+        print(f"[API] Đang gửi {len(downloaded_files)} file sang {ocr_model} để xử lý...")
+        data = extract_information_from_files(downloaded_files, api_key, ocr_model)
         
         # Chạy kiểm tra luật logic
         validation = validate_payment_record(data)

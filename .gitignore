@@ -96,6 +96,9 @@ ipython_config.py
 # Project specific
 *.xlsx
 !backend/assets/UNC_TEMPLATE.xlsx
+# Sổ ghi UNC (SQLite) — dữ liệu cục bộ, không commit
+backend/data/
+*.db
 .env
 credentials.json
 token.json

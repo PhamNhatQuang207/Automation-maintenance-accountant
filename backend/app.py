@@ -220,7 +220,11 @@ def api_analyze():
         
         # Chạy kiểm tra luật logic
         validation = validate_payment_record(data)
-        
+
+        # Lưu bản ghi đã phân tích+kiểm tra vào session (phía server) làm NGUỒN
+        # ĐÁNG TIN CẬY để tạo UNC — tránh việc client sửa số tiền trước khi tạo file.
+        session['last_record'] = data
+
         return jsonify({
             "status": "success",
             "files_found": [f['name'] for f in image_files],
@@ -238,7 +242,10 @@ def api_generate_unc():
         return jsonify({"status": "error", "message": "Chưa đăng nhập"}), 401
 
     req_data = request.get_json() or {}
-    data = req_data.get('data') or {}
+    # Nguồn dữ liệu ĐÁNG TIN CẬY là bản ghi server đã phân tích+kiểm tra (session).
+    # Chỉ fallback về dữ liệu client khi chưa có (ví dụ gọi trực tiếp API).
+    data = session.get('last_record') or req_data.get('data') or {}
+    confirm_dup = bool(req_data.get('confirm'))
 
     # Các trường bắt buộc để dựng được UNC
     required = ['sheet', 'beneficiary', 'account', 'bank', 'remarks']
@@ -254,6 +261,17 @@ def api_generate_unc():
         return jsonify({"status": "error",
                         "message": "Số tiền (amount) không hợp lệ, không thể tạo UNC"}), 400
 
+    # Cảnh báo thanh toán TRÙNG (cùng đơn vị thụ hưởng + số tiền) gần đây.
+    from core.audit import find_recent_duplicate, record_unc
+    dup = find_recent_duplicate(data['beneficiary'], data['amount'])
+    if dup and not confirm_dup:
+        return jsonify({
+            "status": "duplicate",
+            "message": (f"Đã tạo UNC cho '{data['beneficiary']}' số tiền "
+                        f"{data['amount']:,} VND vào ngày {dup['created_at'][:10]}. "
+                        f"Bạn có chắc muốn tạo lại?")
+        }), 409
+
     try:
         from core.generate_unc import create_unc_file, TEMPLATE
         buf = io.BytesIO()
@@ -261,6 +279,9 @@ def api_generate_unc():
         buf.seek(0)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Lỗi khi tạo file UNC: {str(e)}"}), 500
+
+    # Ghi nhật ký UNC đã xuất thành công (phục vụ tra soát + phát hiện trùng lần sau).
+    record_unc(data)
 
     filename = f"UNC_{str(data.get('sheet') or 'PARK1')[:31]}.xlsx"
     return send_file(

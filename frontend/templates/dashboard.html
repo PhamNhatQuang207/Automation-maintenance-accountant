@@ -205,6 +205,40 @@
         }
     });
 
+    async function generateUnc(confirmDup) {
+        const res = await fetch('/api/generate-unc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: lastRecord, confirm: !!confirmDup })
+        });
+
+        // Cảnh báo thanh toán trùng: hỏi lại, nếu đồng ý thì tạo lại với confirm=true
+        if (res.status === 409) {
+            let msg = 'Có thể là thanh toán trùng. Vẫn tạo?';
+            try { msg = (await res.json()).message || msg; } catch (e) { }
+            if (confirm(msg)) return generateUnc(true);
+            return;
+        }
+
+        if (!res.ok) {
+            let msg = 'Không tạo được file UNC.';
+            try { msg = (await res.json()).message || msg; } catch (e) { }
+            alert('Lỗi: ' + msg);
+            return;
+        }
+
+        // Tải file Excel trả về
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `UNC_${(lastRecord.sheet || 'PARK1').substring(0, 31)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
     document.getElementById('btn-approve').addEventListener('click', async () => {
         if (!lastRecord) {
             alert('Chưa có dữ liệu hồ sơ. Vui lòng phân tích AI trước.');
@@ -216,29 +250,7 @@
         document.getElementById('loader').style.display = 'flex';
 
         try {
-            const res = await fetch('/api/generate-unc', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: lastRecord })
-            });
-
-            if (!res.ok) {
-                let msg = 'Không tạo được file UNC.';
-                try { msg = (await res.json()).message || msg; } catch (e) { }
-                alert('Lỗi: ' + msg);
-                return;
-            }
-
-            // Tải file Excel trả về
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `UNC_${(lastRecord.sheet || 'PARK1').substring(0, 31)}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+            await generateUnc(false);
         } catch (err) {
             alert('Có lỗi xảy ra khi tạo UNC: ' + err);
         } finally {

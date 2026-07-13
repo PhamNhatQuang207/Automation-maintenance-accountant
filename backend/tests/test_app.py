@@ -753,6 +753,11 @@ VALID_UNC_RECORD = {
 class TestGenerateUnc:
     """Kiểm tra endpoint tạo file Excel UNC."""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_ledger(self, tmp_path, monkeypatch):
+        """Mỗi test dùng 1 file SQLite riêng để không lẫn dữ liệu trùng giữa các test."""
+        monkeypatch.setenv('UNC_DB_PATH', str(tmp_path / 'ledger.db'))
+
     def test_generate_unc_requires_login(self, client):
         """POST /api/generate-unc khi chưa đăng nhập → 401."""
         res = client.post('/api/generate-unc',
@@ -786,3 +791,42 @@ class TestGenerateUnc:
         assert 'spreadsheetml' in res.headers['Content-Type']
         assert 'attachment' in res.headers['Content-Disposition']
         assert res.data[:2] == b'PK'  # chữ ký file ZIP/xlsx
+
+    def test_generate_unc_duplicate_warning(self, logged_in_client):
+        """Tạo 2 lần cùng beneficiary + amount → lần 2 cảnh báo trùng (409);
+        gửi confirm=true thì vẫn tạo được file."""
+        body = json.dumps({'data': VALID_UNC_RECORD})
+
+        r1 = logged_in_client.post('/api/generate-unc', data=body, content_type='application/json')
+        assert r1.status_code == 200  # lần đầu: OK, được ghi vào sổ
+
+        r2 = logged_in_client.post('/api/generate-unc', data=body, content_type='application/json')
+        assert r2.status_code == 409  # lần 2: cảnh báo trùng
+        assert r2.get_json()['status'] == 'duplicate'
+
+        r3 = logged_in_client.post('/api/generate-unc',
+                                   data=json.dumps({'data': VALID_UNC_RECORD, 'confirm': True}),
+                                   content_type='application/json')
+        assert r3.status_code == 200  # xác nhận: tạo lại thành công
+        assert r3.data[:2] == b'PK'
+
+    def test_generate_unc_locks_to_session_record(self, logged_in_client):
+        """Có bản ghi đã duyệt trong session → tạo UNC theo số tiền server,
+        BỎ QUA dữ liệu client gửi lên (chống sửa số tiền phía trình duyệt)."""
+        import io as _io
+        import zipfile
+
+        locked = dict(VALID_UNC_RECORD, amount=99000000, beneficiary='LOCKED CO')
+        with logged_in_client.session_transaction() as sess:
+            sess['last_record'] = locked
+
+        tampered = dict(VALID_UNC_RECORD, amount=1, beneficiary='TAMPERED')
+        res = logged_in_client.post('/api/generate-unc',
+                                    data=json.dumps({'data': tampered}),
+                                    content_type='application/json')
+        assert res.status_code == 200
+
+        sheet = zipfile.ZipFile(_io.BytesIO(res.data)).read('xl/worksheets/sheet1.xml').decode('utf-8')
+        assert '99.000.000' in sheet    # số tiền của server (đã duyệt)
+        assert 'LOCKED CO' in sheet     # đơn vị của server
+        assert 'TAMPERED' not in sheet  # dữ liệu client bị bỏ qua

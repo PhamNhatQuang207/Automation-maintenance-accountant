@@ -730,3 +730,59 @@ class TestSettings:
                               data={'api_key': 'AIzaSy-key', 'ocr_model': 'gemini-2.5-flash'})
         with logged_in_client.session_transaction() as sess:
             assert sess['ocr_model'] == 'gemini-2.5-flash'
+
+
+# ════════════════════════════════════════════════════
+# NHÓM 9: GENERATE UNC - Xuất file Excel
+# ════════════════════════════════════════════════════
+
+VALID_UNC_RECORD = {
+    'sheet': 'CONG_TY_ABC',
+    'beneficiary': 'CÔNG TY TNHH ABC',
+    'account': '123456789',
+    'bank': 'BIDV - CN Thái Hà',
+    'address': 'Hà Nội',
+    'id_no': '',
+    'amount': 12345678,
+    'amount_words': '',
+    'remarks': 'Thanh toán sửa chữa máy bơm',
+    'request_date': '14/07/2026',
+}
+
+
+class TestGenerateUnc:
+    """Kiểm tra endpoint tạo file Excel UNC."""
+
+    def test_generate_unc_requires_login(self, client):
+        """POST /api/generate-unc khi chưa đăng nhập → 401."""
+        res = client.post('/api/generate-unc',
+                          data=json.dumps({'data': VALID_UNC_RECORD}),
+                          content_type='application/json')
+        assert res.status_code == 401
+
+    def test_generate_unc_missing_required_fields(self, logged_in_client):
+        """Thiếu trường bắt buộc (beneficiary, bank...) → 400."""
+        res = logged_in_client.post('/api/generate-unc',
+                                    data=json.dumps({'data': {'sheet': 'X'}}),
+                                    content_type='application/json')
+        assert res.status_code == 400
+        assert 'Thiếu thông tin' in res.get_json()['message']
+
+    def test_generate_unc_invalid_amount(self, logged_in_client):
+        """Số tiền không phải số → 400."""
+        record = dict(VALID_UNC_RECORD, amount='không phải số')
+        res = logged_in_client.post('/api/generate-unc',
+                                    data=json.dumps({'data': record}),
+                                    content_type='application/json')
+        assert res.status_code == 400
+        assert 'Số tiền' in res.get_json()['message']
+
+    def test_generate_unc_success_returns_xlsx(self, logged_in_client):
+        """Dữ liệu hợp lệ → trả về file .xlsx (zip bắt đầu bằng 'PK')."""
+        res = logged_in_client.post('/api/generate-unc',
+                                    data=json.dumps({'data': VALID_UNC_RECORD}),
+                                    content_type='application/json')
+        assert res.status_code == 200
+        assert 'spreadsheetml' in res.headers['Content-Type']
+        assert 'attachment' in res.headers['Content-Disposition']
+        assert res.data[:2] == b'PK'  # chữ ký file ZIP/xlsx

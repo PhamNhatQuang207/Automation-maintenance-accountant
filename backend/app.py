@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file
 from core.extractor import extract_information_from_files
 from core.validator import validate_payment_record
 
@@ -11,6 +11,7 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'bqt_parkhill1_secure_key_12
 # Cấu hình giả lập cho giai đoạn thiết kế UI
 app.config['DEMO_MODE'] = True
 
+import io
 import json
 import urllib.parse
 import requests
@@ -196,6 +197,45 @@ def api_analyze():
         
     except Exception as e:
         return jsonify({"status": "error", "message": f"Lỗi Google API: {str(e)}"}), 500
+
+@app.route('/api/generate-unc', methods=['POST'])
+def api_generate_unc():
+    """Nhận 1 bản ghi hồ sơ đã duyệt và trả về file Excel UNC để tải xuống."""
+    if not session.get('user'):
+        return jsonify({"status": "error", "message": "Chưa đăng nhập"}), 401
+
+    req_data = request.get_json() or {}
+    data = req_data.get('data') or {}
+
+    # Các trường bắt buộc để dựng được UNC
+    required = ['sheet', 'beneficiary', 'account', 'bank', 'remarks']
+    missing = [f for f in required if not str(data.get(f) or '').strip()]
+    if missing:
+        return jsonify({"status": "error",
+                        "message": f"Thiếu thông tin bắt buộc để tạo UNC: {', '.join(missing)}"}), 400
+
+    # Số tiền phải là số nguyên hợp lệ (dùng cho định dạng số và đọc thành chữ)
+    try:
+        data['amount'] = int(data.get('amount'))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error",
+                        "message": "Số tiền (amount) không hợp lệ, không thể tạo UNC"}), 400
+
+    try:
+        from core.generate_unc import create_unc_file, TEMPLATE
+        buf = io.BytesIO()
+        create_unc_file([data], buf, ngay=data.get('request_date') or None, template=TEMPLATE)
+        buf.seek(0)
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Lỗi khi tạo file UNC: {str(e)}"}), 500
+
+    filename = f"UNC_{str(data.get('sheet') or 'PARK1')[:31]}.xlsx"
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -112,6 +112,9 @@
 {% endblock %}
 {% block scripts %}
 <script>
+    // Bản ghi hồ sơ vừa phân tích (dùng để tạo UNC khi bấm Duyệt)
+    let lastRecord = null;
+
     document.getElementById('analyze-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         document.getElementById('loader').style.display = 'flex';
@@ -142,6 +145,7 @@
             document.getElementById('result-panel').style.pointerEvents = 'auto';
             
             const d = result.data;
+            lastRecord = d;
             document.getElementById('res-beneficiary').textContent = d.beneficiary;
             document.getElementById('res-account').textContent = d.account;
             document.getElementById('res-bank').textContent = d.bank;
@@ -201,8 +205,46 @@
         }
     });
 
-    document.getElementById('btn-approve').addEventListener('click', () => {
-        alert("Đã gửi lệnh tạo UNC! (Tính năng mô phỏng đang được phát triển)");
+    document.getElementById('btn-approve').addEventListener('click', async () => {
+        if (!lastRecord) {
+            alert('Chưa có dữ liệu hồ sơ. Vui lòng phân tích AI trước.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-approve');
+        btn.disabled = true;
+        document.getElementById('loader').style.display = 'flex';
+
+        try {
+            const res = await fetch('/api/generate-unc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: lastRecord })
+            });
+
+            if (!res.ok) {
+                let msg = 'Không tạo được file UNC.';
+                try { msg = (await res.json()).message || msg; } catch (e) { }
+                alert('Lỗi: ' + msg);
+                return;
+            }
+
+            // Tải file Excel trả về
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `UNC_${(lastRecord.sheet || 'PARK1').substring(0, 31)}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('Có lỗi xảy ra khi tạo UNC: ' + err);
+        } finally {
+            btn.disabled = false;
+            document.getElementById('loader').style.display = 'none';
+        }
     });
 </script>
 {% endblock %}

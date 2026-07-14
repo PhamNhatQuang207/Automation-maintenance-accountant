@@ -1,0 +1,24 @@
+# Bí mật / cấu hình local — KHÔNG được đưa vào Docker build context
+client_secret.json
+backend/client_secret.json
+.env
+*.env
+backend/data/
+*.db
+
+# Git / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Docs / misc
+README.md
+*.md
